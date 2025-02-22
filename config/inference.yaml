@@ -1,0 +1,24 @@
+# the model configuration defines the model class and how images are preprocessed
+# this has to match what has been used in the training and shouldn't be changed
+face_model_conf: weights/faces.yaml
+face_model_weights: weights/faces.pt
+license_plate_model_conf: weights/lps.yaml
+license_plate_model_weights: weights/lps.pt
+
+### on which device to run the model
+device: cuda
+
+### additional pre-/post-processing steps
+processing:
+  use: false
+  pre_merge_score_threshold: 0
+  post_merge_score_threshold: 0
+  merge_iou_threshold: 0.5
+  merging_method: "wbf"    # "wbf", "nmm", "nms"
+  area_method: "int"       # "int", "float"
+  mirror_image: false
+  enlarged_regions_n: 0    # number of image subdivisions per dimension, i.e. 2 -> 4 regions
+
+logging:
+  level: debug
+  format: '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
