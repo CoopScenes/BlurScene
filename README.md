@@ -1,29 +1,46 @@
 # BlurScene
-<<<<<<< HEAD
-BlurScene is a model to anonymize faces and license plates of traffic data.
 =======
-
-BlurScene is a model to anonymize faces and license plates of traffic data.
 
 # Table of Contents
 
-1.  [Inference](#org3eb60c5)
-    1.  [Configuration](#org18e28af)
-    2.  [Inference Script](#org78ac0e4)
-    3.  [Server](#orga7c4fd6)
-    4.  [Docker Container](#org2965729)
+1.  [Setup](#org2c8b1f2)
+    1.  [Environment Setup](#org5d942a7)
+2.  [Inference](#org179d296)
+    1.  [Configuration](#org9056a19)
+    2.  [Inference Script](#orgf056ac6)
+    3.  [Server](#org201a534)
+    4.  [Docker Container](#orgb486795)
+
+BlurScene is a model to anonymize faces and license plates of traffic data.
 
 
-<a id="org3eb60c5"></a>
+<a id="org2c8b1f2"></a>
+
+# Setup
+
+
+<a id="org5d942a7"></a>
+
+## Environment Setup
+
+    python -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+
+should suffice given a Python version >= 3.10.
+The code was written using Python 3.10.12.
+
+
+<a id="org179d296"></a>
 
 # Inference
 
 
-<a id="org18e28af"></a>
+<a id="org9056a19"></a>
 
 ## Configuration
 
-The configuration for inference, i.e. for the files [inference.py](inference.py) and [run<sub>server.py</sub>](run_server.py), can be found in [config/inference.yaml](config/inference.yaml).
+The configuration for inference, i.e. for the files [inference.py](inference.py) and [run\_server.py](run_server.py), can be found in [config/inference.yaml](config/inference.yaml).
 
 The paths to the model weights (.pt) and model configuration (.yaml, a hydra config) have to be given separately. Since the model configuration file completely defines the model architecture, one has to be sure that the conf fits the weights. Additionally, [.dockerignore](.dockerignore) whitelists a `weights` directory, so it is easiest to put model weights and config there. The model device can be specified separately in [config/inference.yaml](config/inference.yaml).
 
@@ -48,26 +65,25 @@ The `merge_iou_threshold` defines at which overlap (Intersection over Union, IoU
 At last one can define the logging level (the usual logging-module levels) and the log format.
 
 
-<a id="org78ac0e4"></a>
+<a id="orgf056ac6"></a>
 
 ## Inference Script
 
-[inference.py](inference.py) is a module used by [run<sub>server.py</sub>](run_server.py). However, for testing purposes it is executable. Simply running `python inference.py path/to/image.jpg` should load the model, warm up/compile it, and predict bounding boxes for the given image.
+[inference.py](inference.py) is a module used by [run\_server.py](run_server.py). However, for testing purposes it is executable. Simply running `python inference.py path/to/image.jpg` should load the model, warm up/compile it, and predict bounding boxes for the given image.
 
 
-<a id="orga7c4fd6"></a>
+<a id="org201a534"></a>
 
 ## Server
 
-The [run<sub>server.py</sub>](run_server.py) script starts a local Flask server for testing. For proper worker handling, etc. the server should be started using gunicorn, `gunicorn --config=config/gunicorn.py run_server:app`. gunicorn can be configured in [config/gunicorn.py](config/gunicorn.py) (see the [gunicorn documentation](https://docs.gunicorn.org/en/stable/settings.html) for details). Here it is pre-configured to query the environment variables  `WORKERS`, `WORKER_TIMEOUT`, `PORT` and `LOG_LEVEL`. By default the gunicorn server has the address `0.0.0.0:5000`, i.e. it opens the port 5000 to the network side. Flask on the other hand runs with its default configuration and opens port 5000 only for connections from localhost.
+The [run\_server.py](run_server.py) script starts a local Flask server for testing. For proper worker handling, etc. the server should be started using gunicorn, `gunicorn --config=config/gunicorn.py run_server:app`. gunicorn can be configured in [config/gunicorn.py](config/gunicorn.py) (see the [gunicorn documentation](https://docs.gunicorn.org/en/stable/settings.html) for details). Here it is pre-configured to query the environment variables  `WORKERS`, `WORKER_TIMEOUT`, `PORT` and `LOG_LEVEL`. By default the gunicorn server has the address `0.0.0.0:5000`, i.e. it opens the port 5000 to the network side. Flask on the other hand runs with its default configuration and opens port 5000 only for connections from localhost.
 
 The anonymization endpoint is `/anonymize` and setup can be tested with e.g. `curl -H "Content-Type: image/jpeg" --data-binary @test.jpg http://localhost:5000/anonymize --output returned_image.jpg`.
 
 
-<a id="org2965729"></a>
+<a id="orgb486795"></a>
 
 ## Docker Container
 
-The docker container is built by `=docker build . -t $image_name=` and can be run with e.g. `docker run -d --gpus all -p 5000:5000 --name $container_name $image_name`. With `docker logs -f $container_name` one can monitor the logs and see when the model is ready.
+The docker container is built by `docker build . -t $image_name` and can be run with e.g. `docker run -d --gpus all -p 5000:5000 --name $container_name $image_name`. With `docker logs -f $container_name` one can monitor the logs and see when the model is ready.
 
->>>>>>> f148b41 (inference code)
