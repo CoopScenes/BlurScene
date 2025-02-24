@@ -1,25 +1,24 @@
 # BlurScene
-=======
-
-# Table of Contents
-
-1.  [Setup](#org2c8b1f2)
-    1.  [Environment Setup](#org5d942a7)
-2.  [Inference](#org179d296)
-    1.  [Configuration](#org9056a19)
-    2.  [Inference Script](#orgf056ac6)
-    3.  [Server](#org201a534)
-    4.  [Docker Container](#orgb486795)
-
 BlurScene is a model to anonymize faces and license plates of traffic data.
 
 
-<a id="org2c8b1f2"></a>
+# Table of Contents
+
+1.  [Setup](#org9fe81e0)
+    1.  [Environment Setup](#orge3cb5fb)
+2.  [Inference](#org3bb79f6)
+    1.  [Configuration](#org1e7d7c8)
+    2.  [Inference Script](#orgac835df)
+    3.  [Server](#org427d09e)
+    4.  [Docker Container](#orgf5f7a36)
+
+
+<a id="org9fe81e0"></a>
 
 # Setup
 
 
-<a id="org5d942a7"></a>
+<a id="orge3cb5fb"></a>
 
 ## Environment Setup
 
@@ -31,12 +30,12 @@ should suffice given a Python version >= 3.10.
 The code was written using Python 3.10.12.
 
 
-<a id="org179d296"></a>
+<a id="org3bb79f6"></a>
 
 # Inference
 
 
-<a id="org9056a19"></a>
+<a id="org1e7d7c8"></a>
 
 ## Configuration
 
@@ -65,14 +64,14 @@ The `merge_iou_threshold` defines at which overlap (Intersection over Union, IoU
 At last one can define the logging level (the usual logging-module levels) and the log format.
 
 
-<a id="orgf056ac6"></a>
+<a id="orgac835df"></a>
 
 ## Inference Script
 
 [inference.py](inference.py) is a module used by [run\_server.py](run_server.py). However, for testing purposes it is executable. Simply running `python inference.py path/to/image.jpg` should load the model, warm up/compile it, and predict bounding boxes for the given image.
 
 
-<a id="org201a534"></a>
+<a id="org427d09e"></a>
 
 ## Server
 
@@ -81,7 +80,7 @@ The [run\_server.py](run_server.py) script starts a local Flask server for testi
 The anonymization endpoint is `/anonymize` and setup can be tested with e.g. `curl -H "Content-Type: image/jpeg" --data-binary @test.jpg http://localhost:5000/anonymize --output returned_image.jpg`.
 
 
-<a id="orgb486795"></a>
+<a id="orgf5f7a36"></a>
 
 ## Docker Container
 
