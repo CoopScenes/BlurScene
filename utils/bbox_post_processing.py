@@ -1,11 +1,9 @@
-import argparse
 import torch
 
 from collections.abc import Sequence
 from torchvision.ops import nms, box_iou as iou_float
 
 from common.type_aliases import BatchPredictionT
-from utils.misc import load_predictions_hdf, save_predictions_hdf
 
 
 class Postprocessor():
@@ -381,74 +379,3 @@ iou_int = Postprocessor.iou_int
 #     for i, (img, bbs, bbs_merged) in enumerate(zip(imgs, preds_batch, preds_batch_merged)):
 #         write_torch_img_dets(img, bbs[0], f"bb_img_{i}_premerge.jpg")
 #         write_torch_img_dets(img, bbs_merged[0], f"bb_img_{i}_merged.jpg")
-
-
-def prediction_postprocessing(
-        hdf_infile: str,
-        hdf_outfile: str,
-        merge_iou_thresh: float,
-        pre_merge_score_thresh: float,
-        post_merge_score_thresh: float,
-        merging_method: str,
-        area_method: str
-):
-    batch_size = 32
-
-    proc = Postprocessor(
-        merge_iou_thresh=merge_iou_thresh,
-        pre_merge_score_thresh=pre_merge_score_thresh,
-        post_merge_score_thresh=post_merge_score_thresh,
-        merging_method=merging_method,
-        area_method=area_method,
-    )
-
-    d = load_predictions_hdf(hdf_infile)
-
-    batch = []
-    new_bbs = []
-    new_cls = []
-    new_scs = []
-    for bbs, cls, scs in zip(d["bboxes"], d["classes"], d["scores"]):
-        batch.append((torch.tensor(bbs), torch.tensor(cls), torch.tensor(scs)))
-
-        if len(batch) == batch_size:
-            new_batch = proc.post_processing(batch)
-
-            new_bbs.extend([x[0].numpy() for x in new_batch])
-            new_cls.extend([x[1].numpy() for x in new_batch])
-            new_scs.extend([x[2].numpy() for x in new_batch])
-            batch = []
-
-    if len(batch) > 0:
-        new_batch = proc.post_processing(batch)
-
-        new_bbs.extend([x[0].numpy() for x in new_batch])
-        new_cls.extend([x[1].numpy() for x in new_batch])
-        new_scs.extend([x[2].numpy() for x in new_batch])
-
-    if len(new_bbs) != len(d["bboxes"]):
-        raise RuntimeError("Inconsistent number of merged predictions.")
-
-    save_predictions_hdf(hdf_outfile, d["data_ids"], new_bbs, new_cls, new_scs)
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("infile")
-    parser.add_argument("outfile")
-    parser.add_argument("merge_iou_thresh", type=float)
-    parser.add_argument("pre_merge_score_thresh", type=float)
-    parser.add_argument("post_merge_score_thresh", type=float)
-    parser.add_argument("merging_method")
-    parser.add_argument("area_method")
-    args = parser.parse_args()
-
-    prediction_postprocessing(
-        args.infile,
-        args.outfile,
-        args.merge_iou_thresh,
-        args.pre_merge_score_thresh,
-        args.post_merge_score_thresh,
-        args.merging_method,
-        args.area_method
-    )
