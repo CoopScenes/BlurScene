@@ -290,152 +290,6 @@ class RegionProposalNetwork(OriginalRegionProposalNetwork):
 
 tmdf.RegionProposalNetwork = RegionProposalNetwork
 
-
-# #
-# # alternative RoIHeads with DIoU
-# #
-
-# OriginalRoIHeads = tmdf.RoIHeads
-
-# class AltRoIHeads(OriginalRoIHeads):
-#     def forward(
-#         self,
-#         features,  # type: Dict[str, Tensor]
-#         proposals,  # type: List[Tensor]
-#         image_shapes,  # type: List[Tuple[int, int]]
-#         targets=None,  # type: Optional[List[Dict[str, Tensor]]]
-#     ):
-#         # type: (...) -> Tuple[List[Dict[str, Tensor]], Dict[str, Tensor]]
-#         """
-#         Copy that decodes box_regression to actual boxes before passing
-#         into the loss.
-#         """
-#         if targets is not None:
-#             for t in targets:
-#                 # TODO: https://github.com/pytorch/pytorch/issues/26731
-#                 floating_point_types = (torch.float, torch.double, torch.half)
-#                 if not t["boxes"].dtype in floating_point_types:
-#                     raise TypeError(f"target boxes must of float type, instead got {t['boxes'].dtype}")
-#                 if not t["labels"].dtype == torch.int64:
-#                     raise TypeError(f"target labels must of int64 type, instead got {t['labels'].dtype}")
-#                 if self.has_keypoint():
-#                     if not t["keypoints"].dtype == torch.float32:
-#                         raise TypeError(f"target keypoints must of float type, instead got {t['keypoints'].dtype}")
-
-#         if self.training:
-#             proposals, labels, proposal_target_boxes = self.select_training_samples(proposals, targets)
-#         else:
-#             labels = None
-
-#         box_features = self.box_roi_pool(features, proposals, image_shapes)
-#         box_features = self.box_head(box_features)
-#         class_logits, box_regression = self.box_predictor(box_features)
-
-#         result: List[Dict[str, torch.Tensor]] = []
-#         losses = {}
-#         if self.training:
-#             if labels is None:
-#                 raise ValueError("labels cannot be None")
-
-#             loss_classifier, loss_box_reg = self.loss(
-#                 class_logits,
-#                 self.box_coder.decode(box_regression, proposals),
-#                 labels,
-#                 proposal_target_boxes
-#             )
-
-#             losses = {"loss_classifier": loss_classifier, "loss_box_reg": loss_box_reg}
-#         else:
-#             boxes, scores, labels = self.postprocess_detections(class_logits, box_regression, proposals, image_shapes)
-#             num_images = len(boxes)
-#             for i in range(num_images):
-#                 result.append(
-#                     {
-#                         "boxes": boxes[i],
-#                         "labels": labels[i],
-#                         "scores": scores[i],
-#                     }
-#                 )
-
-#         return result, losses
-
-#     def loss(self, class_logits, pred_boxes, labels, target_boxes):
-#         # type: (Tensor, Tensor, List[Tensor], List[Tensor]) -> Tuple[Tensor, Tensor]
-#         """
-#         Copy of fastrcnn_loss, modified to use DIoU loss.
-#         """
-
-#         labels = torch.cat(labels, dim=0)
-#         target_boxes = torch.cat(target_boxes, dim=0)
-
-#         classification_loss = torch.nn.functional.cross_entropy(class_logits, labels)
-#         classification_loss = classification_loss / labels.numel()
-
-#         sampled_pos_inds_subset = torch.where(labels > 0)[0]
-#         labels_pos = labels[sampled_pos_inds_subset]
-#         N, num_classes = class_logits.shape
-#         pred_boxes = pred_boxes.reshape(N, num_classes, 4)
-
-
-#         box_loss = complete_box_iou_loss(
-#             pred_boxes[sampled_pos_inds_subset, labels_pos],
-#             target_boxes[sampled_pos_inds_subset],
-#             reduction="sum"
-#         )
-#         # originally:
-#         # box_loss = F.smooth_l1_loss(
-#         #     box_regression[sampled_pos_inds_subset, labels_pos],
-#         #     regression_targets[sampled_pos_inds_subset],
-#         #     beta=1 / 9,
-#         #     reduction="sum",
-#         # )
-#         box_loss = box_loss / labels.numel()
-#         return classification_loss, box_loss
-
-
-#     def select_training_samples(
-#         self,
-#         proposals,  # type: List[Tensor]
-#         targets,  # type: Optional[List[Dict[str, Tensor]]]
-#     ):
-#         """
-#         Copy that returns target boxes instead of regression targets.
-#         """
-#         # type: (...) -> Tuple[List[Tensor], List[Tensor], List[Tensor], List[Tensor]]
-#         self.check_targets(targets)
-#         if targets is None:
-#             raise ValueError("targets should not be None")
-#         dtype = proposals[0].dtype
-#         device = proposals[0].device
-
-#         gt_boxes = [t["boxes"].to(dtype) for t in targets]
-#         gt_labels = [t["labels"] for t in targets]
-
-#         # append ground-truth bboxes to propos
-#         proposals = self.add_gt_proposals(proposals, gt_boxes)
-
-#         # get matching gt indices for each proposal
-#         matched_idxs, labels = self.assign_targets_to_proposals(proposals, gt_boxes, gt_labels)
-#         # sample a fixed proportion of positive-negative proposals
-#         sampled_inds = self.subsample(labels)
-#         matched_gt_boxes = []
-#         num_images = len(proposals)
-#         for img_id in range(num_images):
-#             img_sampled_inds = sampled_inds[img_id]
-#             proposals[img_id] = proposals[img_id][img_sampled_inds]
-#             labels[img_id] = labels[img_id][img_sampled_inds]
-#             matched_idxs[img_id] = matched_idxs[img_id][img_sampled_inds]
-
-#             gt_boxes_in_image = gt_boxes[img_id]
-#             if gt_boxes_in_image.numel() == 0:
-#                 gt_boxes_in_image = torch.zeros((1, 4), dtype=dtype, device=device)
-#             matched_gt_boxes.append(gt_boxes_in_image[matched_idxs[img_id]])
-
-#         return proposals, labels, matched_gt_boxes
-
-# tmdf.RoIHeads = AltRoIHeads
-
-
 #
 # roi_align using improved alignment from detectron2
 #
@@ -460,10 +314,10 @@ def chunked_box_iou(
         chunk_size = 16384 # in isolation 1800 is optimum on 4090, but ultraslow in training
 ) -> torch.Tensor:
     """
-    Copy of torchvision.ops.boxes.box_iou that replaces the intersection and
-    union calculation, originally torchvision.ops.boxes._box_inter_union, with
-    a little more memory efficient variant that is called sequentially in
-    chunks.
+    Copy of torchvision.ops.boxes.box_iou that chunks the IoU
+    computations. Can be used in case of datasets with a huge number
+    of candidate boxes, which frequently lead to OOMs when processed
+    at once.
     """
     if sqrt(boxes1.shape[0]*boxes2.shape[0]) < chunk_size:
         return box_iou(boxes1, boxes2)
@@ -517,7 +371,6 @@ def _memopt_box_inter_union(
     ).clamp(min=0)  # [N,M,2]
     inter = wh[:, :, 0] * wh[:, :, 1]  # [N,M]
 
-    # union = area1[:, None] + area2 - inter
     union = box_area(boxes1)[:, None] + box_area(boxes2) - inter
 
     return inter, union
