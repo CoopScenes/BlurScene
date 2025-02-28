@@ -126,25 +126,22 @@ def anonymize(img: NDArray[np.uint8], dets: NDArray[np.int32]):
 
     return img
 
-
 def _anonymize(img: NDArray[np.uint8]):
-    kx = int(img.shape[1]/5)
-    ky = int(img.shape[0]/5)
-    kx = kx if kx % 2 == 1 else kx+1
-    ky = ky if ky % 2 == 1 else ky+1
-    kx = kx if kx > 3 else 3
-    ky = ky if ky > 3 else 3
-
-    blur = cv2.GaussianBlur(img, (kx, ky), kx/2, ky/2)
-
-    mask = _get_linear_mask(img)
-    # mask = _get_elliptical_mask(img)
-
-    mask = mask[:, :, None]
-    blur = (1 - mask) * img + mask * blur
-    blur = np.round(blur).astype(int)
-
-    return blur
+    block_size = 5
+    x1, y1, x2, y2 = 0, 0, img.shape[1], img.shape[0]  
+    
+    cropped = img[y1:y2, x1:x2]
+    h, w = cropped.shape[:2]
+    
+    # Apply mosaic effect block-wise
+    for i in range(0, h, block_size):
+        for j in range(0, w, block_size):
+            block = cropped[i:i+block_size, j:j+block_size]
+            avg_color = np.mean(block, axis=(0, 1), dtype=int)
+            cropped[i:i+block_size, j:j+block_size] = avg_color
+    
+    img[y1:y2, x1:x2] = cropped
+    return img
 
 
 def _get_linear_mask(img: NDArray[np.uint8]):
