@@ -126,33 +126,32 @@ def anonymize(img: NDArray[np.uint8], dets: NDArray[np.int32]):
 
     return img
 
-def _anonymize(img: NDArray[np.uint8]):
+
+def _anonymize(crop: NDArray[np.uint8]):
     """
     Apply a mosaic-style anonymization to the input crop. I.e.
     crop should be a region of an image which is to be obfuscated.
     """
     block_size = 5
-    x1, y1, x2, y2 = 0, 0, img.shape[1], img.shape[0]  
-    
-    cropped = img[y1:y2, x1:x2]
-    h, w = cropped.shape[:2]
-    
-    im = cropped.copy()
+
+    h, w = crop.shape[:2]
+    im = crop.copy() # keep original region for mask overlay
     
     # Apply mosaic effect block-wise
     for i in range(0, h, block_size):
         for j in range(0, w, block_size):
-            block = cropped[i:i+block_size, j:j+block_size]
+            block = crop[i:i+block_size, j:j+block_size]
             avg_color = np.mean(block, axis=(0, 1), dtype=int)
-            cropped[i:i+block_size, j:j+block_size] = avg_color
+            crop[i:i+block_size, j:j+block_size] = avg_color
 
-    mask = _get_elliptical_mask(cropped)
+    # overlay the mosaic over the original crop, such that the
+    # transition towards the edges is smooth
+    mask = _get_elliptical_mask(crop)
     mask = mask[:, :, None]
-    cropped = (1 - mask) * im + mask * cropped
-    cropped = np.round(cropped).astype(int)
-    
-    img[y1:y2, x1:x2] = cropped
-    return img
+    crop = (1 - mask) * im + mask * crop
+    crop = np.round(crop).astype(int)
+
+    return crop
 
 
 def _get_linear_mask(img: NDArray[np.uint8]):
