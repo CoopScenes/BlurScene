@@ -127,6 +127,10 @@ def anonymize(img: NDArray[np.uint8], dets: NDArray[np.int32]):
     return img
 
 def _anonymize(img: NDArray[np.uint8]):
+    """
+    Apply a mosaic-style anonymization to the input crop. I.e.
+    crop should be a region of an image which is to be obfuscated.
+    """
     block_size = 5
     x1, y1, x2, y2 = 0, 0, img.shape[1], img.shape[0]  
     
@@ -152,7 +156,10 @@ def _anonymize(img: NDArray[np.uint8]):
 
 
 def _get_linear_mask(img: NDArray[np.uint8]):
-    # generate a mask for smooth transition on the edges
+    """
+    Generate a mask with values in [0,1] for smooth transitions
+    on the edges of img.
+    """
     mask = np.ones(img.shape[:2])
     x_margin = int(img.shape[1] / 10)
     y_margin = int(img.shape[0] / 10)
@@ -173,6 +180,10 @@ def _get_linear_mask(img: NDArray[np.uint8]):
 
 
 def _get_elliptical_mask(img: NDArray[np.uint8]):
+    """
+    Generate an elliptical mask with values in [0,1] for smooth
+    transitions along the shape of an ellipse. 
+    """
     kx = int(img.shape[1]/20)
     ky = int(img.shape[0]/20)
     kx = kx if kx % 2 == 1 else kx+1
@@ -181,7 +192,6 @@ def _get_elliptical_mask(img: NDArray[np.uint8]):
     ky = ky if ky < 11 else 11
 
     m = np.zeros(img.shape[:2])
-    # generate elliptical mask
     center = (int(img.shape[1]/2), int(img.shape[0]/2))
     axes = (img.shape[1] - kx, img.shape[0] - ky)
     r = (center, axes, 0)
