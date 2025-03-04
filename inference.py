@@ -37,7 +37,8 @@ logging.basicConfig(
 
 def _load_model(
         conf_path: str,
-        weights_path: str
+        weights_path: str,
+        device: str
 ) -> tuple[torch.nn.Module, OmegaConf]:
     """
     Get models from model weights checkpoint and the corresponding
@@ -60,7 +61,7 @@ def _load_model(
         cfg.model.target,
         _convert_="all"
     )
-    model.load_state_dict(torch.load(weights_path, weights_only=True))
+    model.load_state_dict(torch.load(weights_path, weights_only=True, map_location=device))
     model.eval()
 
     return model, cfg
@@ -72,12 +73,14 @@ class Inference:
         logger.info("Loading face model.")
         self.face_model, self.face_cfg = _load_model(
             cfg.face_model_conf,
-            cfg.face_model_weights
+            cfg.face_model_weights,
+            cfg.device
         )
         logger.info("Loading license plate model.")
         self.lp_model, self.lp_cfg = _load_model(
             cfg.license_plate_model_conf,
-            cfg.license_plate_model_weights
+            cfg.license_plate_model_weights,
+            cfg.device
         )
 
         if cfg.processing.use:

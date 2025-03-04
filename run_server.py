@@ -78,7 +78,7 @@ def anon_route():
     logger.debug(f"Found {(~face_mask).sum().item()} license plates.")
 
     # to numpy for blurring
-    bboxes = bboxes.cpu().numpy().astype(np.int32)
+    bboxes = bboxes.to(dtype=torch.int32).cpu().numpy().astype(np.int32)
 
     # blur and mark dets
     img = anonymize(img, bboxes)
