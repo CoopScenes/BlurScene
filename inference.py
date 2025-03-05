@@ -127,7 +127,7 @@ class Inference:
         )
 
         # warmup/compile models
-        logger.info("Model warmup. This can take a while if the model is compiled.")
+        logger.info("Model warmup. This can take a while if the model has to be compiled.")
         dummy_img = np.random.randint(
             0,
             255,

@@ -4,21 +4,21 @@ BlurScene is a model to anonymize faces and license plates of traffic data.
 
 # Table of Contents
 
-1.  [Setup](#org9fe81e0)
-    1.  [Environment Setup](#orge3cb5fb)
-2.  [Inference](#org3bb79f6)
-    1.  [Configuration](#org1e7d7c8)
-    2.  [Inference Script](#orgac835df)
-    3.  [Server](#org427d09e)
-    4.  [Docker Container](#orgf5f7a36)
+1.  [Setup](#org2892d21)
+    1.  [Environment Setup](#org28ebdb7)
+2.  [Inference](#org273581f)
+    1.  [Configuration](#org5a2f9b9)
+    2.  [Inference Script](#org1c40784)
+    3.  [Server](#org300c0fe)
+    4.  [Docker Container](#org3e05b3c)
 
 
-<a id="org9fe81e0"></a>
+<a id="org2892d21"></a>
 
 # Setup
 
 
-<a id="orge3cb5fb"></a>
+<a id="org28ebdb7"></a>
 
 ## Environment Setup
 
@@ -30,12 +30,12 @@ should suffice given a Python version >= 3.10.
 The code was written using Python 3.10.12.
 
 
-<a id="org3bb79f6"></a>
+<a id="org273581f"></a>
 
 # Inference
 
 
-<a id="org1e7d7c8"></a>
+<a id="org5a2f9b9"></a>
 
 ## Configuration
 
@@ -64,14 +64,14 @@ The `merge_iou_threshold` defines at which overlap (Intersection over Union, IoU
 At last one can define the logging level (the usual logging-module levels) and the log format.
 
 
-<a id="orgac835df"></a>
+<a id="org1c40784"></a>
 
 ## Inference Script
 
 [inference.py](inference.py) is a module used by [run\_server.py](run_server.py). However, for testing purposes it is executable. Simply running `python inference.py path/to/image.jpg` should load the model, warm up/compile it, and predict bounding boxes for the given image.
 
 
-<a id="org427d09e"></a>
+<a id="org300c0fe"></a>
 
 ## Server
 
@@ -80,9 +80,17 @@ The [run\_server.py](run_server.py) script starts a local Flask server for testi
 The anonymization endpoint is `/anonymize` and setup can be tested with e.g. `curl -H "Content-Type: image/jpeg" --data-binary @test.jpg http://localhost:5000/anonymize --output returned_image.jpg`.
 
 
-<a id="orgf5f7a36"></a>
+<a id="org3e05b3c"></a>
 
 ## Docker Container
 
-The docker container is built by `docker build . -t $image_name` and can be run with e.g. `docker run -d --gpus all -p 5000:5000 --name $container_name $image_name`. With `docker logs -f $container_name` one can monitor the logs and see when the model is ready.
+
+### Build
+
+The docker container is built by `docker build . -t $image_name`. Most configuration items have to be set before building and can not be changed after the image has been built, i.e. inference.yaml setting like device are fixed for an image.
+
+
+### Run
+
+The container can be run with e.g. `docker run -d --gpus all -p 5000:5000 --name $container_name $image_name`, if the image has been built for `device: cuda`. Monitor the logs with `docker logs -f $container_name` to see when the model is ready. If the model configuration has compilation activated it will take some time before the model is ready.
 
