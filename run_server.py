@@ -27,6 +27,7 @@ inference = Inference()
 
 @app.route("/", methods=["GET"])
 def test():
+    """Return a basic HTML page with usage instructions."""
     url = request.host_url
     anon_url = f"{url}{anon_ep}"
     msg = f"""
@@ -47,6 +48,7 @@ def test():
 
 @app.route(f"/{anon_ep}", methods=["POST"])
 def anon_route():
+    """Handle POST requests for anonymizing images."""
     if "image" not in request.content_type:
         return "Unknown content type", 415
 
@@ -101,12 +103,18 @@ def anon_route():
     return send_file(img_buf, mime, download_name=f"anon_image.{suffix}")
 
 
-def anonymize(img: NDArray[np.uint8], dets: NDArray[np.int32]):
+def anonymize(img: NDArray, dets: NDArray) -> NDArray:
     """
-    Returns image in which all bboxes in dets have been anonymized.
+    Anonymize regions in the image based on bounding boxes.
 
     WARNING:
     Modifies img.
+    Args:
+        img: Input image to be anonymized.
+        dets: Array of bounding boxes to anonymize.
+
+    Returns:
+        Image with anonymized regions.
     """
     # TODO vectorize if seriously used
     h, w = img.shape[:2]
@@ -127,16 +135,21 @@ def anonymize(img: NDArray[np.uint8], dets: NDArray[np.int32]):
     return img
 
 
-def _anonymize(crop: NDArray[np.uint8]):
+def _anonymize(crop: NDArray) -> NDArray:
     """
-    Apply a mosaic-style anonymization to the input crop. I.e.
-    crop should be a region of an image which is to be obfuscated.
+    Apply mosaic-style anonymization to an image crop.
+
+    Args:
+        crop: Region of the image to be obfuscated.
+
+    Returns:
+        Anonymized crop.
     """
     block_size = 5
 
     h, w = crop.shape[:2]
     im = crop.copy() # keep original region for mask overlay
-    
+
     # Apply mosaic effect block-wise
     for i in range(0, h, block_size):
         for j in range(0, w, block_size):
@@ -154,10 +167,13 @@ def _anonymize(crop: NDArray[np.uint8]):
     return crop
 
 
-def _get_linear_mask(img: NDArray[np.uint8]):
+def _get_linear_mask(img: NDArray) -> NDArray:
     """
     Generate a mask with values in [0,1] for smooth transitions
     on the edges of img.
+
+    Args:
+        img: Input image for which the mask is generated.
     """
     mask = np.ones(img.shape[:2])
     x_margin = int(img.shape[1] / 10)
@@ -178,10 +194,16 @@ def _get_linear_mask(img: NDArray[np.uint8]):
     return mask
 
 
-def _get_elliptical_mask(img: NDArray[np.uint8]):
+def _get_elliptical_mask(img: NDArray) -> NDArray:
     """
     Generate an elliptical mask with values in [0,1] for smooth
-    transitions along the shape of an ellipse. 
+    transitions along the shape of an ellipse.
+
+    Args:
+        img: Input image for which the mask is generated.
+
+    Returns:
+        Elliptical mask with values in [0,1].
     """
     kx = int(img.shape[1]/20)
     ky = int(img.shape[0]/20)

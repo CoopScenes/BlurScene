@@ -43,6 +43,14 @@ def _load_model(
     """
     Get models from model weights checkpoint and the corresponding
     hydra config (usually the one used in training).
+
+    Args:
+        conf_path: Path to model configuration file
+        weights_path: Path to model weights file
+        device: Device to load model onto (e.g., 'cuda' or 'cpu')
+
+    Returns:
+        Tuple containing model and its configuration
     """
     # we load the conf manually, so we don't have to handle all the
     # output hydra would generate with a @hydra.main decorator
@@ -70,6 +78,9 @@ def _load_model(
 
 class Inference:
     def __init__(self):
+        """
+        Initialize Inference class with face and license plate models.
+        """
         logger.info("Loading face model.")
         self.face_model, self.face_cfg = _load_model(
             cfg.face_model_conf,
@@ -132,7 +143,19 @@ class Inference:
 
     @torch.autograd.grad_mode.inference_mode()
     def predict(self, img: ImageT) -> PredictionT:
-        # if the preprocessing_trafo rescales the image in any way,
+        """
+        Perform inference on input image.
+
+        Args:
+            img: Input image in numpy format
+
+        Returns:
+            Tuple containing:
+                - Bounding boxes coordinates
+                - Class indices
+                - Confidence scores
+        """
+        # if the preprocessing-trafo rescales the image in any way,
         # we use this dummy box to compute the reverse coordinate trafo for
         # predicted bboxes
         h, w = img.shape[:2]
