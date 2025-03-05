@@ -8,9 +8,9 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-COPY requirements_inference.txt /usr/src/code
+COPY requirements.txt /usr/src/code
 RUN pip3 install -U pip
-RUN pip3 install --no-cache-dir -r requirements_inference.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 COPY . /usr/src/code
 
