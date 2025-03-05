@@ -1,6 +1,4 @@
 *
-!README.md
-!requirements_inference.txt
 !common/classes.py
 !common/type_aliases.py
 !config/gunicorn.py
@@ -15,5 +13,6 @@
 !.dockerignore
 !inference.py
 !run_server.py
-!requirements_inference.txt
+!requirements.txt
+!README.md
 !weights/*

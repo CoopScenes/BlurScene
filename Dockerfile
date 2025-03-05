@@ -1,3 +1,14 @@
+# To build the container run something like
+#    docker build -t name:revision .
+# and to run the container execute something like
+#    docker run --rm --name container_name --gpus all -p8081:5000 name:revision
+#
+# Make sure that config/inference.yaml is set up correctly before building,
+# e.g. device, weight locations, postprocessing.
+#
+# To keep the container "lightweight"" take care that requirements.txt
+# only holds the requirements needed for inference
+
 FROM ubuntu:22.04
 
 WORKDIR /usr/src/code
