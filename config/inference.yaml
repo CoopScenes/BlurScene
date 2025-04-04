@@ -1,12 +1,16 @@
 # the model configuration defines the model class and how images are preprocessed
 # this has to match what has been used in the training and shouldn't be changed
-face_model_conf: weights/faces.yaml
-face_model_weights: weights/faces.pt
-license_plate_model_conf: weights/lps.yaml
-license_plate_model_weights: weights/lps.pt
+face_model_conf: /mnt/cold_data/anonymisation/training/share/weights/faces.yaml
+face_model_weights: /mnt/cold_data/anonymisation/training/share/weights/faces.pt
+license_plate_model_conf: /mnt/cold_data/anonymisation/training/share/weights/lps.yaml
+license_plate_model_weights: /mnt/cold_data/anonymisation/training/share/weights/lps.pt
 
-### on which device to run the model
-device: cuda
+# Für Multi-GPU-Zuweisung:
+face_device: "cuda:0"
+license_plate_device: "cuda:1"
+
+# Fallback-Device:
+device: "cuda"
 
 ### additional pre-/post-processing steps
 processing:
