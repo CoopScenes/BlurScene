@@ -98,28 +98,35 @@ def batch_anon_route():
         return "No images uploaded.", 400
 
     images = []
+    filenames = []
     for f in files:
         file_bytes = f.read()
         try:
             np_array = np.frombuffer(file_bytes, np.uint8)
+            # Die Bilder werden als BGR decodiert; hier ändern wir die Kanäle, damit sie RGB sind.
             img = cv2.imdecode(np_array, cv2.IMREAD_COLOR)[..., (2, 1, 0)]
             images.append(img)
+            # Speichere den übergebenen Dateinamen, der idealerweise der camera_name + ".png" entspricht.
+            filenames.append(f.filename)
         except Exception as e:
             logger.exception("Unable to decode one of the images.")
             return f"Error decoding images: {e}", 500
 
-    # Batch-Inferenz durchführen
+    # Batch-Inferenz durchführen – die Reihenfolge der Bilder entspricht der Reihenfolge der Dateinamen.
     batch_results = inference.predict_batch(images)
 
-    # Erstelle ein ZIP-Archiv mit den anonymisierten Bildern
+    # Erstelle ein ZIP-Archiv, in dem die anonymisierten Bilder mit den ursprünglichen Dateinamen gespeichert werden.
     mem_zip = io.BytesIO()
     with zipfile.ZipFile(mem_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for idx, (boxes, _, _) in enumerate(batch_results):
+        for i, (boxes, _, _) in enumerate(batch_results):
             boxes_np = boxes.to(dtype=torch.int32).cpu().numpy().astype(np.int32)
-            anon_img = anonymize(images[idx], boxes_np)
-            ret, encoded_img = cv2.imencode(".jpg", anon_img[..., (2,1,0)])
+            anon_img = anonymize(images[i], boxes_np)
+            # Hier wird das Bild als JPEG kodiert – du kannst auch PNG wählen, wenn du verlustfrei bleiben willst.
+            ret, encoded_img = cv2.imencode(".jpg", anon_img[..., (2, 1, 0)])
             if ret:
-                zf.writestr(f"anon_image_{idx}.jpg", encoded_img.tobytes())
+                # Verwende den originalen Dateinamen (camera_name + ".png")
+                # Falls du möchtest, kannst du auch die Endung ändern, z.B. in ".jpg"
+                zf.writestr(filenames[i], encoded_img.tobytes())
     mem_zip.seek(0)
     return send_file(mem_zip, mimetype="application/zip", as_attachment=True, download_name="anonymized_images.zip")
 

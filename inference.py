@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import os
+
 os.environ['HYDRA_FULL_ERROR'] = '1'
 os.environ['NO_ALBUMENTATIONS_UPDATE'] = '1'
 
@@ -18,10 +19,8 @@ from models.processor import ProcessingWrapper
 from utils.images import img_to_torch
 
 cfg_path = "config/inference.yaml"
-
 if not Path(cfg_path).exists():
     raise FileNotFoundError(f"Inference configuration not found in path {cfg_path}.")
-
 cfg = OmegaConf.load(cfg_path)
 
 logger = logging.getLogger(__name__)
@@ -29,6 +28,7 @@ logging.basicConfig(
     level=getattr(logging, cfg.logging.level.upper()),
     format=cfg.logging.format
 )
+
 
 def _load_model(conf_path: str, weights_path: str, device: str) -> Tuple[torch.nn.Module, OmegaConf]:
     """
@@ -45,14 +45,15 @@ def _load_model(conf_path: str, weights_path: str, device: str) -> Tuple[torch.n
     model.eval()
     return model, model_cfg
 
+
 class Inference:
     def __init__(self):
         """
         Initialisiert die Inferenzklasse, lädt beide Modelle auf unterschiedliche GPUs und bereitet das Preprocessing vor.
         """
         # Multi-GPU: Neue Config-Einträge für explizite Gerätezuordnung
-        self.face_device = cfg.get("face_device", cfg.device)           # z. B. "cuda:0"
-        self.lp_device = cfg.get("license_plate_device", cfg.device)      # z. B. "cuda:1"
+        self.face_device = cfg.get("face_device", cfg.device)  # z. B. "cuda:0"
+        self.lp_device = cfg.get("license_plate_device", cfg.device)  # z. B. "cuda:1"
 
         logger.info("Loading face model.")
         self.face_model, self.face_cfg = _load_model(
@@ -67,7 +68,7 @@ class Inference:
             self.lp_device
         )
 
-        # Optionale Pre-/Post-Processing Wrapper
+        # Optionaler Pre-/Post-Processing Wrapper
         if cfg.processing.use:
             kwargs = {k: v for k, v in cfg.processing.items() if k != "use"}
             self.face_model = ProcessingWrapper(model=self.face_model, **kwargs)
@@ -80,9 +81,9 @@ class Inference:
 
         logger.info("Preparing image normalization pipeline.")
         if (
-            self.face_cfg.default_trafo != self.lp_cfg.default_trafo or
-            self.face_cfg.image_width != self.lp_cfg.image_width or
-            self.face_cfg.image_height != self.lp_cfg.image_height
+                self.face_cfg.default_trafo != self.lp_cfg.default_trafo or
+                self.face_cfg.image_width != self.lp_cfg.image_width or
+                self.face_cfg.image_height != self.lp_cfg.image_height
         ):
             raise NotImplementedError(
                 "Image transformations for face and license plate models differ. "
@@ -115,6 +116,7 @@ class Inference:
 
         preproc = self.preprocessing_trafo(image=img, bboxes=dummy_orig)
         img_tensor = img_to_torch(preproc["image"])[None, ...]
+        # Stelle sicher, dass img_tensor auf dem Standardgerät (cfg.device) liegt
         img_tensor = img_tensor.to(cfg.device)
 
         with torch.autocast(self.face_device, enabled=self.face_cfg.with_amp):
@@ -122,6 +124,11 @@ class Inference:
 
         with torch.autocast(self.lp_device, enabled=self.lp_cfg.with_amp):
             lp_boxes, lp_class, lp_scores = self.lp_model(img_tensor.to(self.lp_device))["prediction"][0]
+
+        # Verschiebe die Ergebnisse des lp-Modells auf das face_device, damit alle Tensoren auf demselben Gerät liegen:
+        lp_boxes = lp_boxes.to(self.face_device)
+        lp_class = lp_class.to(self.face_device)
+        lp_scores = lp_scores.to(self.face_device)
 
         face_class[:] = self.class_map.name_to_index["face"]
         lp_class[:] = self.class_map.name_to_index["license plate"]
@@ -178,6 +185,11 @@ class Inference:
             face_boxes, face_class, face_scores = face_preds[i]
             lp_boxes, lp_class, lp_scores = lp_preds[i]
 
+            # Verschiebe lp-Ergebnisse auf face_device:
+            lp_boxes = lp_boxes.to(self.face_device)
+            lp_class = lp_class.to(self.face_device)
+            lp_scores = lp_scores.to(self.face_device)
+
             face_class[:] = self.class_map.name_to_index["face"]
             lp_class[:] = self.class_map.name_to_index["license plate"]
 
@@ -199,6 +211,7 @@ class Inference:
 
             results.append((boxes, classes, scores))
         return results
+
 
 if __name__ == "__main__":
     import argparse
