@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import io
 import zipfile
+import time
 
 from flask import Flask, request, send_file
 from io import BytesIO
@@ -89,10 +90,8 @@ def anon_route():
 
 @app.route("/batch_anonymize", methods=["POST"])
 def batch_anon_route():
-    """
-    Verarbeitet POST-Anfragen für Batch-Inferenz.
-    Erwartet einen multipart/form-data Request mit mehreren Dateien unter dem Schlüssel 'images'.
-    """
+    total_start = time.perf_counter()  # Startzeit für den gesamten Batch
+
     files = request.files.getlist("images")
     if not files:
         return "No images uploaded.", 400
@@ -103,30 +102,38 @@ def batch_anon_route():
         file_bytes = f.read()
         try:
             np_array = np.frombuffer(file_bytes, np.uint8)
-            # Die Bilder werden als BGR decodiert; hier ändern wir die Kanäle, damit sie RGB sind.
-            img = cv2.imdecode(np_array, cv2.IMREAD_COLOR)[..., (2, 1, 0)]
+            img = cv2.imdecode(np_array, cv2.IMREAD_COLOR)[..., (2,1,0)]
             images.append(img)
-            # Speichere den übergebenen Dateinamen, der idealerweise der camera_name + ".png" entspricht.
             filenames.append(f.filename)
         except Exception as e:
-            logger.exception("Unable to decode one of the images.")
+            app.logger.exception("Unable to decode one of the images.")
             return f"Error decoding images: {e}", 500
 
-    # Batch-Inferenz durchführen – die Reihenfolge der Bilder entspricht der Reihenfolge der Dateinamen.
+    # Zeitmessung für Inferenz
+    model_start = time.perf_counter()
     batch_results = inference.predict_batch(images)
+    model_end = time.perf_counter()
+    model_duration = model_end - model_start
 
-    # Erstelle ein ZIP-Archiv, in dem die anonymisierten Bilder mit den ursprünglichen Dateinamen gespeichert werden.
+    # Postprocessing: Erstellen des ZIP-Archivs
+    post_start = time.perf_counter()
     mem_zip = io.BytesIO()
     with zipfile.ZipFile(mem_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
         for i, (boxes, _, _) in enumerate(batch_results):
             boxes_np = boxes.to(dtype=torch.int32).cpu().numpy().astype(np.int32)
             anon_img = anonymize(images[i], boxes_np)
-            # Hier wird das Bild als JPEG kodiert – du kannst auch PNG wählen, wenn du verlustfrei bleiben willst.
-            ret, encoded_img = cv2.imencode(".jpg", anon_img[..., (2, 1, 0)])
+            ret, encoded_img = cv2.imencode(".jpg", anon_img[..., (2,1,0)])
             if ret:
-                # Verwende den originalen Dateinamen (camera_name + ".png")
-                # Falls du möchtest, kannst du auch die Endung ändern, z.B. in ".jpg"
+                # Verwende den ursprünglichen Dateinamen (z.B. "BACK_LEFT.png")
                 zf.writestr(filenames[i], encoded_img.tobytes())
+    post_end = time.perf_counter()
+    post_duration = post_end - post_start
+
+    total_end = time.perf_counter()
+    total_duration = total_end - total_start
+
+    app.logger.info(f"Batch Processing Time: Inference: {model_duration:.3f}s, Postprocessing: {post_duration:.3f}s, Total: {total_duration:.3f}s")
+
     mem_zip.seek(0)
     return send_file(mem_zip, mimetype="application/zip", as_attachment=True, download_name="anonymized_images.zip")
 
