@@ -37,7 +37,7 @@ def test():
     <h2>Usage</h2>
     <p>Send an image to {anon_url} for single-image processing or multiple images to /batch_anonymize.</p>
     <h2>Curl Bash Example (Single Image)</h2>
-    <p>curl -H "Content-Type: image/jpeg" --data-binary @image.jpg {anon_url} --output returned_image.jpg</p>
+    <p>curl -H "Content-Type: image/png" --data-binary @image.png {anon_url} --output returned_image.png</p>
     </body>
     </html>
     """
@@ -75,12 +75,9 @@ def anon_route():
     bboxes_np = bboxes.to(dtype=torch.int32).cpu().numpy().astype(np.int32)
     img = anonymize(img, bboxes_np)
 
-    if "jpg" in request.content_type or "jpeg" in request.content_type:
-        mime = "image/jpeg"
-        suffix = "jpeg"
-    else:
-        mime = "image/png"
-        suffix = "png"
+    # Für verlustfreie Verarbeitung wird PNG verwendet
+    mime = "image/png"
+    suffix = "png"
 
     imenc_ret, img_buf = cv2.imencode(f".{suffix}", img[..., (2,1,0)])
     if not imenc_ret:
@@ -122,10 +119,10 @@ def batch_anon_route():
         for i, (boxes, _, _) in enumerate(batch_results):
             boxes_np = boxes.to(dtype=torch.int32).cpu().numpy().astype(np.int32)
             anon_img = anonymize(images[i], boxes_np)
-            ret, encoded_img = cv2.imencode(".jpg", anon_img[..., (2,1,0)])
+            ret, encoded_img = cv2.imencode(".png", anon_img[..., (2,1,0)])
             if ret:
-                # Verwende den ursprünglichen Dateinamen (z.B. "BACK_LEFT.png")
-                zf.writestr(filenames[i], encoded_img.tobytes())
+                base_name = filenames[i].rsplit('.', 1)[0]
+                zf.writestr(f"{base_name}.png", encoded_img.tobytes())
     post_end = time.perf_counter()
     post_duration = post_end - post_start
 
