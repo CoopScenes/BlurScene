@@ -156,7 +156,6 @@ def anonymize(img: NDArray, dets: NDArray) -> NDArray:
     Returns:
         Image with anonymized regions.
     """
-    # TODO vectorize if seriously used
     h, w = img.shape[:2]
     for x0, y0, x1, y1, *_ in dets:
         x_margin = int((x1 - x0) / 10)
@@ -226,11 +225,9 @@ def _get_elliptical_mask(img: NDArray) -> NDArray:
     ky = ky if ky < 11 else 11
 
     m = np.zeros(img.shape[:2])
-    center = (int(img.shape[1]/2), int(img.shape[0]/2))
+    center = (int(img.shape[1] / 2), int(img.shape[0] / 2))
     axes = (img.shape[1] - kx, img.shape[0] - ky)
-    r = (center, axes, 0)
-    m = cv2.ellipse(m, r, 1, -1)
-
+    cv2.ellipse(m, center, axes, 0, 0, 360, 1, -1)
     m = cv2.blur(m, (kx, ky), borderType=cv2.BORDER_CONSTANT)
 
     return m
