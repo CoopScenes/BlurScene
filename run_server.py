@@ -167,18 +167,25 @@ def _anonymize(crop: NDArray) -> NDArray:
     crop = (1 - mask) * im + mask * crop
     return np.round(crop).astype(int)
 
+
 def _get_elliptical_mask(img: NDArray) -> NDArray:
-    kx = int(img.shape[1] / 20)
-    ky = int(img.shape[0] / 20)
+    h, w = img.shape[:2]
+    kx = int(w / 20)
+    ky = int(h / 20)
     kx = kx if kx % 2 == 1 else kx + 1
     ky = ky if ky % 2 == 1 else ky + 1
     kx = min(kx, 11)
     ky = min(ky, 11)
-    m = np.zeros(img.shape[:2])
-    center = (int(img.shape[1] / 2), int(img.shape[0] / 2))
-    axes = (img.shape[1] - kx, img.shape[0] - ky)
-    r = (center, axes, 0)
-    m = cv2.ellipse(m, r, 1, -1)
+    m = np.zeros((h, w), dtype=np.uint8)
+    center = (w // 2, h // 2)
+    # Verwende halbe Dimensionen für die Achsen; dies entspricht einer Ellipse, die
+    # im Idealfall in die Mitte des Bildes passt, angepasst um kx/ky.
+    axes = ((w - kx) // 2, (h - ky) // 2)
+    # Falls das Bild zu klein sein sollte und axes <= 0 ergeben, setze einen Fallback
+    if axes[0] <= 0 or axes[1] <= 0:
+        axes = (w // 2, h // 2)
+    # Zeichne eine gefüllte Ellipse in die Maske (0 bis 360 Grad)
+    m = cv2.ellipse(m, center, axes, 0, 0, 360, 1, -1)
     m = cv2.blur(m, (kx, ky), borderType=cv2.BORDER_CONSTANT)
     return m
 
