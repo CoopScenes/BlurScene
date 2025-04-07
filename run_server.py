@@ -21,12 +21,11 @@ logger = getLogger(__name__)
 app = Flask(__name__)
 anon_ep = "anonymize"
 
-# Inferenz-Instanz initialisieren
 inference = Inference()
 
 @app.route("/", methods=["GET"])
 def test():
-    """Gibt eine einfache HTML-Seite mit Hinweisen zurück."""
+    """Return a basic HTML page with usage instructions."""
     url = request.host_url
     anon_url = f"{url}{anon_ep}"
     msg = f"""
@@ -45,10 +44,11 @@ def test():
 
 @app.route(f"/{anon_ep}", methods=["POST"])
 def anon_route():
-    """Verarbeitet POST-Anfragen für die Anonymisierung eines einzelnen Bildes."""
+    """Handle POST requests for anonymizing images."""
     if "image" not in request.content_type:
         return "Unknown content type", 415
 
+    # check upload size
     img_size_bytes = request.content_length
     if not img_size_bytes:
         msg = "Image has 0 Bytes."
@@ -60,6 +60,8 @@ def anon_route():
         return f"Image too large: {img_size_bytes / 2**20:.2e} MiB", 413
 
     img_bytes = request.get_data()
+
+    # image to numpy array
     try:
         np_array = np.frombuffer(img_bytes, np.uint8)
         img = cv2.imdecode(np_array, cv2.IMREAD_COLOR)[..., (2, 1, 0)]
@@ -68,16 +70,23 @@ def anon_route():
         return f"Something went wrong: {e}", 500
 
     bboxes, classes, _ = inference.predict(img)
+
     face_mask = classes == inference.class_map.name_to_index["face"]
     logger.debug(f"Found {face_mask.sum().item()} faces.")
     logger.debug(f"Found {(~face_mask).sum().item()} license plates.")
 
+    # to numpy for blurring
     bboxes_np = bboxes.to(dtype=torch.int32).cpu().numpy().astype(np.int32)
+
+    # blur and mark dets
     img = anonymize(img, bboxes_np)
 
-    # Für verlustfreie Verarbeitung wird PNG verwendet
-    mime = "image/png"
-    suffix = "png"
+    if "jpg" in request.content_type or "jpeg" in request.content_type:
+        mime = "image/jpeg"
+        suffix = "jpeg"
+    else:
+        mime = "image/png"
+        suffix = "png"
 
     imenc_ret, img_buf = cv2.imencode(f".{suffix}", img[..., (2,1,0)])
     if not imenc_ret:
@@ -122,7 +131,7 @@ def batch_anon_route():
             ret, encoded_img = cv2.imencode(".png", anon_img[..., (2,1,0)])
             if ret:
                 base_name = filenames[i].rsplit('.', 1)[0]
-                zf.writestr(f"{base_name}.png", encoded_img.tobytes())
+                zf.writestr(f"{base_name}.PNG", encoded_img.tobytes())
     post_end = time.perf_counter()
     post_duration = post_end - post_start
 
@@ -136,57 +145,94 @@ def batch_anon_route():
 
 def anonymize(img: NDArray, dets: NDArray) -> NDArray:
     """
-    Wendet einen Mosaic-Style-Effekt auf die durch die Bounding Boxes definierten Bereiche an.
+    Anonymize regions in the image based on bounding boxes.
+
+    WARNING:
+    Modifies img.
+    Args:
+        img: Input image to be anonymized.
+        dets: Array of bounding boxes to anonymize.
+
+    Returns:
+        Image with anonymized regions.
     """
+    # TODO vectorize if seriously used
     h, w = img.shape[:2]
     for x0, y0, x1, y1, *_ in dets:
         x_margin = int((x1 - x0) / 10)
         y_margin = int((y1 - y0) / 10)
-        x0m = max(x0 - x_margin, 0)
-        y0m = max(y0 - y_margin, 0)
-        x1m = min(x1 + x_margin, w)
-        y1m = min(y1 + y_margin, h)
+        x0m = x0 - x_margin
+        x1m = x1 + x_margin
+        y0m = y0 - y_margin
+        y1m = y1 + y_margin
+        x0m = x0m if x0m > 0 else 0
+        x1m = x1m if x1m < w else w
+        y0m = y0m if y0m > 0 else 0
+        y1m = y1m if y1m < h else h
         anon_box = _anonymize(img[y0m:y1m, x0m:x1m])
         img[y0m:y1m, x0m:x1m] = anon_box
+
     return img
+
 
 def _anonymize(crop: NDArray) -> NDArray:
     """
-    Wendet eine Mosaik-Anonymisierung auf einen Bildausschnitt an.
+    Apply mosaic-style anonymization to an image crop.
+
+    Args:
+        crop: Region of the image to be obfuscated.
+
+    Returns:
+        Anonymized crop.
     """
     block_size = 5
+
     h, w = crop.shape[:2]
-    im = crop.copy()
+    im = crop.copy() # keep original region for mask overlay
+
+    # Apply mosaic effect block-wise
     for i in range(0, h, block_size):
         for j in range(0, w, block_size):
             block = crop[i:i+block_size, j:j+block_size]
-            avg_color = np.mean(block, axis=(0, 1), dtype=int)
+            avg_color = np.mean(block, axis=(0, 1)).astype(np.uint8)
             crop[i:i+block_size, j:j+block_size] = avg_color
+
+    # overlay the mosaic over the original crop, such that the
+    # transition towards the edges is smooth
     mask = _get_elliptical_mask(crop)
     mask = mask[:, :, None]
     crop = (1 - mask) * im + mask * crop
-    return np.round(crop).astype(int)
+    crop = np.round(crop).astype(int)
+
+    return crop
 
 
 def _get_elliptical_mask(img: NDArray) -> NDArray:
-    h, w = img.shape[:2]
-    kx = int(w / 20)
-    ky = int(h / 20)
-    kx = kx if kx % 2 == 1 else kx + 1
-    ky = ky if ky % 2 == 1 else ky + 1
-    kx = min(kx, 11)
-    ky = min(ky, 11)
-    m = np.zeros((h, w), dtype=np.uint8)
-    center = (w // 2, h // 2)
-    # Verwende halbe Dimensionen für die Achsen; dies entspricht einer Ellipse, die
-    # im Idealfall in die Mitte des Bildes passt, angepasst um kx/ky.
-    axes = ((w - kx) // 2, (h - ky) // 2)
-    # Falls das Bild zu klein sein sollte und axes <= 0 ergeben, setze einen Fallback
-    if axes[0] <= 0 or axes[1] <= 0:
-        axes = (w // 2, h // 2)
-    # Zeichne eine gefüllte Ellipse in die Maske (0 bis 360 Grad)
-    m = cv2.ellipse(m, center, axes, 0, 0, 360, 1, -1)
+    """
+    Generate an elliptical mask with values in [0,1] for smooth
+    transitions along the shape of an ellipse.
+
+    Args:
+        img: Input image for which the mask is generated.
+
+    Returns:
+        Elliptical mask with values in [0,1].
+    """
+    kx = int(img.shape[1]/20)
+    ky = int(img.shape[0]/20)
+    kx = kx if kx % 2 == 1 else kx+1
+    ky = ky if ky % 2 == 1 else ky+1
+    kx = kx if kx < 11 else 11
+    ky = ky if ky < 11 else 11
+
+    m = np.zeros(img.shape[:2])
+    center = (int(img.shape[1]/2), int(img.shape[0]/2))
+    axes = (img.shape[1] - kx, img.shape[0] - ky)
+    r = (center, axes, 0)
+    m = cv2.ellipse(m, r, 1, -1)
+
     m = cv2.blur(m, (kx, ky), borderType=cv2.BORDER_CONSTANT)
+
     return m
 
 if __name__ == "__main__":
