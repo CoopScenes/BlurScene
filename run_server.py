@@ -124,7 +124,7 @@ def batch_anon_route():
     # Postprocessing: Erstellen des ZIP-Archivs
     post_start = time.perf_counter()
     mem_zip = io.BytesIO()
-    with zipfile.ZipFile(mem_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+    with zipfile.ZipFile(mem_zip, mode="w", compression=zipfile.ZIP_STORED) as zf:
         for i, (boxes, _, _) in enumerate(batch_results):
             boxes_np = boxes.to(dtype=torch.int32).cpu().numpy().astype(np.int32)
             anon_img = anonymize(images[i], boxes_np)
