@@ -145,29 +145,30 @@ def batch_anon_route():
 
 def anonymize(img: NDArray, dets: NDArray) -> NDArray:
     """
-    Anonymize regions in the image based on bounding boxes.
+    Applies a mosaic-style anonymization effect to image regions defined by bounding boxes.
 
-    WARNING:
-    Modifies img.
+    WARNING: This function modifies the image in-place.
+
     Args:
-        img: Input image to be anonymized.
-        dets: Array of bounding boxes to anonymize.
+        img: Input image as ndarray (H, W, 3), dtype=uint8.
+        dets: Array of bounding boxes with format [x0, y0, x1, y1, ...].
 
     Returns:
-        Image with anonymized regions.
+        The anonymized image (same object as input).
     """
     h, w = img.shape[:2]
     for x0, y0, x1, y1, *_ in dets:
         x_margin = int((x1 - x0) / 10)
         y_margin = int((y1 - y0) / 10)
-        x0m = x0 - x_margin
-        x1m = x1 + x_margin
-        y0m = y0 - y_margin
-        y1m = y1 + y_margin
-        x0m = x0m if x0m > 0 else 0
-        x1m = x1m if x1m < w else w
-        y0m = y0m if y0m > 0 else 0
-        y1m = y1m if y1m < h else h
+        x0m = max(x0 - x_margin, 0)
+        y0m = max(y0 - y_margin, 0)
+        x1m = min(x1 + x_margin, w)
+        y1m = min(y1 + y_margin, h)
+
+        # Skip very small or empty regions
+        if y1m - y0m < 2 or x1m - x0m < 2:
+            continue
+
         anon_box = _anonymize(img[y0m:y1m, x0m:x1m])
         img[y0m:y1m, x0m:x1m] = anon_box
 
@@ -176,61 +177,64 @@ def anonymize(img: NDArray, dets: NDArray) -> NDArray:
 
 def _anonymize(crop: NDArray) -> NDArray:
     """
-    Apply mosaic-style anonymization to an image crop.
+    Applies mosaic pixelation and an elliptical fade mask to a given image crop.
 
     Args:
-        crop: Region of the image to be obfuscated.
+        crop: A subregion of the image to be anonymized.
 
     Returns:
-        Anonymized crop.
+        The anonymized crop as a new array (same shape).
     """
     block_size = 5
-
     h, w = crop.shape[:2]
-    im = crop.copy() # keep original region for mask overlay
 
-    # Apply mosaic effect block-wise
+    if h < 2 or w < 2:
+        return crop  # Prevent errors with tiny crops
+
+    im = crop.copy()
     for i in range(0, h, block_size):
         for j in range(0, w, block_size):
             block = crop[i:i+block_size, j:j+block_size]
             avg_color = np.mean(block, axis=(0, 1)).astype(np.uint8)
             crop[i:i+block_size, j:j+block_size] = avg_color
 
-    # overlay the mosaic over the original crop, such that the
-    # transition towards the edges is smooth
     mask = _get_elliptical_mask(crop)
-    mask = mask[:, :, None]
-    crop = (1 - mask) * im + mask * crop
-    crop = np.round(crop).astype(int)
-
-    return crop
+    mask = mask[:, :, None].astype(np.float32)
+    crop = im.astype(np.float32) * (1 - mask) + crop.astype(np.float32) * mask
+    return np.round(np.clip(crop, 0, 255)).astype(np.uint8)
 
 
 def _get_elliptical_mask(img: NDArray) -> NDArray:
     """
-    Generate an elliptical mask with values in [0,1] for smooth
-    transitions along the shape of an ellipse.
+    Generates a smooth elliptical mask in the range [0, 1] for soft blending.
 
     Args:
-        img: Input image for which the mask is generated.
+        img: The image region for which the mask is generated.
 
     Returns:
-        Elliptical mask with values in [0,1].
+        A 2D float32 mask with values between 0 and 1.
     """
-    kx = int(img.shape[1]/20)
-    ky = int(img.shape[0]/20)
-    kx = kx if kx % 2 == 1 else kx+1
-    ky = ky if ky % 2 == 1 else ky+1
-    kx = kx if kx < 11 else 11
-    ky = ky if ky < 11 else 11
+    h, w = img.shape[:2]
+    kx = int(w / 20)
+    ky = int(h / 20)
+    kx = kx if kx % 2 == 1 else kx + 1
+    ky = ky if ky % 2 == 1 else ky + 1
+    kx = min(kx, 11)
+    ky = min(ky, 11)
 
-    m = np.zeros(img.shape[:2])
-    center = (int(img.shape[1] / 2), int(img.shape[0] / 2))
-    axes = (img.shape[1] - kx, img.shape[0] - ky)
+    m = np.zeros((h, w), dtype=np.uint8)
+    center = (w // 2, h // 2)
+    axes = ((w - kx) // 2, (h - ky) // 2)
+
+    # Fallback for very small crops
+    if axes[0] <= 0 or axes[1] <= 0:
+        axes = (w // 2, h // 2)
+
     cv2.ellipse(m, center, axes, 0, 0, 360, 1, -1)
-    m = cv2.blur(m, (kx, ky), borderType=cv2.BORDER_CONSTANT)
+    m = cv2.blur(m.astype(np.float32), (kx, ky), borderType=cv2.BORDER_CONSTANT)
 
     return m
+
 
 if __name__ == "__main__":
     app.run()
