@@ -14,12 +14,12 @@ device: "cuda"
 
 ### additional pre-/post-processing steps
 processing:
-  use: false
-  pre_merge_score_threshold: 0
+  use: true
+  pre_merge_score_threshold: 0.2
   post_merge_score_threshold: 0
   merge_iou_threshold: 0.5
   merging_method: "wbf"    # "wbf", "nmm", "nms"
-  area_method: "int"       # "int", "float"
+  area_method: "float"       # "int", "float"
   mirror_image: false
   enlarged_regions_n: 0    # number of image subdivisions per dimension, i.e. 2 -> 4 regions
 
