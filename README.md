@@ -1,96 +1,159 @@
-# BlurScene
-BlurScene is a model to anonymize faces and license plates of traffic data.
+# 🚫 BlurScene — Privacy-preserving Anonymization for Traffic Data
 
+**BlurScene** is a deep learning model designed to **anonymize faces and license plates** in traffic-related images and video data.
 
-# Table of Contents
+---
 
-1.  [Setup](#org2892d21)
-    1.  [Environment Setup](#org28ebdb7)
-2.  [Inference](#org273581f)
-    1.  [Configuration](#org5a2f9b9)
-    2.  [Inference Script](#org1c40784)
-    3.  [Server](#org300c0fe)
-    4.  [Docker Container](#org3e05b3c)
+## 📋 Table of Contents
 
+1. [🔧 Setup](#setup)
+    - [📦 Environment](#environment-setup)
+2. [🧠 Inference](#inference)
+    - [⚙️ Configuration](#configuration)
+    - [📥 Model Weights Download](#model-weights-download)
+    - [🧪 Inference Script](#inference-script)
+    - [🌐 Server](#server)
+    - [🐳 Docker](#docker)
 
-<a id="org2892d21"></a>
+---
 
-# Setup
+## 🔧 Setup
 
+### 📦 Environment Setup
 
-<a id="org28ebdb7"></a>
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
 
-## Environment Setup
+> ✅ Requires Python ≥ 3.10 (tested with 3.10.12)
 
-    python -m venv venv
-    source venv/bin/activate
-    pip install -r requirements.txt
+---
 
-should suffice given a Python version >= 3.10.
-The code was written using Python 3.10.12.
+## 🧠 Inference
 
+### ⚙️ Configuration
 
-<a id="org273581f"></a>
+All inference settings can be found in [`config/inference.yaml`](config/inference.yaml).  
+You must provide:
 
-# Inference
+- ✅ Path to the **model weights** `.pt`
+- ✅ Path to the **model configuration** `.yaml` (Hydra config)
 
+📁 It's recommended to store both in a `weights/` folder (which is whitelisted in `.dockerignore`).
 
-<a id="org5a2f9b9"></a>
+#### 🧰 Optional Processing Steps:
 
-## Configuration
+- `mirror_image`: horizontal mirroring  
+- `enlarged_regions_n`: crops the image into _n × n_ subregions
 
-The configuration for inference, i.e. for the files [inference.py](inference.py) and [run\_server.py](run_server.py), can be found in [config/inference.yaml](config/inference.yaml).
+#### 🔎 Post-Processing Parameters:
 
-The paths to the model weights (.pt) and model configuration (.yaml, a hydra config) have to be given separately. Since the model configuration file completely defines the model architecture, one has to be sure that the conf fits the weights. Additionally, [.dockerignore](.dockerignore) whitelists a `weights` directory, so it is easiest to put model weights and config there. The model device can be specified separately in [config/inference.yaml](config/inference.yaml).
+- `pre_merge_score_threshold`, `post_merge_score_threshold`: filter weak predictions
+- `merging_method`:  
+  - `wbf`: Weighted Box Fusion  
+  - `nms`: Non-Maximum Suppression  
+  - `nmm`: Non-Maximum Merging
+- `merge_iou_threshold`: IoU threshold for merging
+- `area_method`: how box area is computed:
+  - `int`: `(x1 - x0 + 1) * (y1 - y0 + 1)`
+  - `float`: `(x1 - x0) * (y1 - y0)`
 
-Additional processing steps can be configured in the `processing` section. It is possible to send the image in multiple variants through the model and gather the detections from each variant. There a two options:
+You can also configure logging level and format via the YAML.
 
--   `mirror_image` which mirrors the image horizontally,
--   `enlarged_regions_n` which slices the image into $n^2$ parts (i.e. the `_n` defines the slices per dimension).
+---
 
-Furthermore, there are the usual post-processing options, i.e.
+### 📥 Model Weights Download
 
--   `pre_merge_score_threshold`, `post_merge_score_threshold` throw away predictions below the given scores
--   `merging_method` sets a merging algorithm, one of
-    -   Weighted Box Fusion, which computes an average box from overlapping boxes,
-    -   Non-Maximum Suppression, which only keeps the highest scoring of overlapping boxes, and
-    -   Non-Maximum Merging, which produces the enveloping box.
+You can download the pretrained model weights and matching configuration from the following link:
 
-The `merge_iou_threshold` defines at which overlap (Intersection over Union, IoU) boxes must be merged. `area_method` changes how the box area for the IoU is computed, either
+👉 [**Download BlurScene Weights**](https://cloud.volkmann-sv.de/index.php/s/4m8sfqBPkAdG7rP)
 
--   `int` is $A = (x_1 - x_0 + 1) * (y_1 - y_0 + 1)$
--   `float` is $A = (x_1 - x_0) * (y_1 - y_0)$.
+📁 Place the downloaded files inside the `weights/` directory.  
+⚠️ Make sure the `.pt` and `.yaml` files match exactly — otherwise inference may fail.
 
-At last one can define the logging level (the usual logging-module levels) and the log format.
+---
 
+### 🧪 Inference Script
 
-<a id="org1c40784"></a>
+You can test inference directly via:
 
-## Inference Script
+```bash
+python inference.py path/to/image.jpg
+```
 
-[inference.py](inference.py) is a module used by [run\_server.py](run_server.py). However, for testing purposes it is executable. Simply running `python inference.py path/to/image.jpg` should load the model, warm up/compile it, and predict bounding boxes for the given image.
+This loads the model, compiles it if necessary, and outputs detections for the image.
 
+---
 
-<a id="org300c0fe"></a>
+### 🌐 Server
 
-## Server
+Start a local Flask server using:
 
-The [run\_server.py](run_server.py) script starts a local Flask server for testing. For proper worker handling, etc. the server should be started using gunicorn, `gunicorn --config=config/gunicorn.py run_server:app`. gunicorn can be configured in [config/gunicorn.py](config/gunicorn.py) (see the [gunicorn documentation](https://docs.gunicorn.org/en/stable/settings.html) for details). Here it is pre-configured to query the environment variables  `WORKERS`, `WORKER_TIMEOUT`, `PORT` and `LOG_LEVEL`. By default the gunicorn server has the address `0.0.0.0:5000`, i.e. it opens the port 5000 to the network side. Flask on the other hand runs with its default configuration and opens port 5000 only for connections from localhost.
+```bash
+python run_server.py
+```
 
-The anonymization endpoint is `/anonymize` and setup can be tested with e.g. `curl -H "Content-Type: image/jpeg" --data-binary @test.jpg http://localhost:5000/anonymize --output returned_image.jpg`.
+Or use **Gunicorn** (recommended):
 
+```bash
+gunicorn --config=config/gunicorn.py run_server:app
+```
 
-<a id="org3e05b3c"></a>
+🔧 Gunicorn reads environment variables:
+- `WORKERS`
+- `WORKER_TIMEOUT`
+- `PORT`
+- `LOG_LEVEL`
 
-## Docker Container
+Default address is `http://0.0.0.0:5000`.
 
+#### 🧪 Test the Endpoint
 
-### Build
+```bash
+curl -H "Content-Type: image/jpeg" --data-binary @test.jpg http://localhost:5000/anonymize --output returned_image.jpg
+```
 
-The docker container is built by `docker build . -t $image_name`. Most configuration items have to be set before building and can not be changed after the image has been built, i.e. inference.yaml setting like device are fixed for an image.
+---
 
+### 🐳 Docker
 
-### Run
+#### 🏗 Build
 
-The container can be run with e.g. `docker run -d --gpus all -p 5000:5000 --name $container_name $image_name`, if the image has been built for `device: cuda`. Monitor the logs with `docker logs -f $container_name` to see when the model is ready. If the model configuration has compilation activated it will take some time before the model is ready.
+```bash
+docker build . -t blurscene
+```
 
+Note: Settings in `inference.yaml` (e.g. `device`) are **fixed** at build time.
+
+#### 🚀 Run
+
+```bash
+docker run -d --gpus all -p 5000:5000 --name blurscene_container blurscene
+```
+
+🔍 Monitor logs:
+
+```bash
+docker logs -f blurscene_container
+```
+
+Wait for model compilation to complete before sending requests.
+
+---
+
+## 📑 Citation
+
+```
+@misc{vosshans2024aeifdatacollectiondataset,
+    author    = {Marcel Vosshans and Alexander Baumann and Matthias Drueppel and Omar Ait-Aider and Ralf Woerner and Youcef Mezouar and Thao Dang and Markus Enzweiler},
+    title     = {The AEIF Data Collection: A Dataset for Infrastructure-Supported Perception Research with Focus on Public Transportation},
+    url       = {https://arxiv.org/abs/2407.08261},
+    year      = {2024},
+}
+```
+
+## 📜 License
+
+This project is released under the **[MIT License](LICENSE)**.
