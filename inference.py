@@ -15,6 +15,7 @@ from typing import List, Tuple
 
 from common.classes import ClassMap
 from common.type_aliases import ImageT, PredictionT
+from datasets.transforms import build_from_config
 from models.processor import ProcessingWrapper
 from utils.images import img_to_torch
 
@@ -54,6 +55,8 @@ class Inference:
         # Multi-GPU: Neue Config-Einträge für explizite Gerätezuordnung
         self.face_device = cfg.get("face_device", cfg.device)  # z. B. "cuda:0"
         self.lp_device = cfg.get("license_plate_device", cfg.device)  # z. B. "cuda:1"
+        self.face_autocast_device = str(self.face_device).split(":")[0]
+        self.lp_autocast_device = str(self.lp_device).split(":")[0]
 
         logger.info("Loading face model.")
         self.face_model, self.face_cfg = _load_model(
@@ -90,10 +93,7 @@ class Inference:
                 "Only both models using the same transformation is implemented."
             )
 
-        self.preprocessing_trafo = hydra.utils.instantiate(
-            self.face_cfg.default_trafo,
-            _convert_="all"
-        )
+        self.preprocessing_trafo = build_from_config(self.face_cfg.default_trafo)
 
         # Warmup der Modelle (Einzelbild-Warmup reicht als Demo)
         logger.info("Model warmup. This can take a while if the model has to be compiled.")
@@ -119,10 +119,10 @@ class Inference:
         # Stelle sicher, dass img_tensor auf dem Standardgerät (cfg.device) liegt
         img_tensor = img_tensor.to(cfg.device)
 
-        with torch.autocast(self.face_device, enabled=self.face_cfg.with_amp):
+        with torch.autocast(self.face_autocast_device, enabled=self.face_cfg.with_amp):
             face_boxes, face_class, face_scores = self.face_model(img_tensor.to(self.face_device))["prediction"][0]
 
-        with torch.autocast(self.lp_device, enabled=self.lp_cfg.with_amp):
+        with torch.autocast(self.lp_autocast_device, enabled=self.lp_cfg.with_amp):
             lp_boxes, lp_class, lp_scores = self.lp_model(img_tensor.to(self.lp_device))["prediction"][0]
 
         # Verschiebe die Ergebnisse des lp-Modells auf das face_device, damit alle Tensoren auf demselben Gerät liegen:
@@ -173,11 +173,11 @@ class Inference:
 
         # Gesichtsmodell auf face_device
         batch_face = batch.to(self.face_device)
-        with torch.autocast(self.face_device, enabled=self.face_cfg.with_amp):
+        with torch.autocast(self.face_autocast_device, enabled=self.face_cfg.with_amp):
             face_preds = self.face_model(batch_face)["prediction"]
         # Kennzeichenmodell auf lp_device
         batch_lp = batch.to(self.lp_device)
-        with torch.autocast(self.lp_device, enabled=self.lp_cfg.with_amp):
+        with torch.autocast(self.lp_autocast_device, enabled=self.lp_cfg.with_amp):
             lp_preds = self.lp_model(batch_lp)["prediction"]
 
         results = []

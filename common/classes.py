@@ -1,5 +1,7 @@
-from collections.abc import Sequence
+from __future__ import annotations
+
 from collections import defaultdict
+from typing import DefaultDict, Optional, Sequence, Tuple
 
 
 class ClassMap():
@@ -10,10 +12,10 @@ class ClassMap():
     Non-existing class names are mapped to None.
     """
     def __init__(self, classes: Sequence[str]):
-        self.classes: tuple[str, ...] = tuple(sorted(set(classes)))
+        self.classes: Tuple[str, ...] = tuple(sorted(set(classes)))
 
-        self.index_to_name: defaultdict[int, str | None] = defaultdict(lambda: None)
-        self.name_to_index: defaultdict[str, int | None] = defaultdict(lambda: None)
+        self.index_to_name: DefaultDict[int, Optional[str]] = defaultdict(lambda: None)
+        self.name_to_index: DefaultDict[str, Optional[int]] = defaultdict(lambda: None)
 
         for idx, name in enumerate(self.classes):
             self.index_to_name[idx] = name

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import torch
 import torchvision.models.detection.faster_rcnn as tmdf
 import torchvision.ops.poolers as top

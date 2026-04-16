@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from common.type_aliases import BatchPredictionT, BatchTorchImageT, TorchImageT
 from logging import getLogger
 import torch

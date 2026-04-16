@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Simple torch module base (or mixin) class providing some commonly used stuff.
 """
@@ -5,7 +7,7 @@ Simple torch module base (or mixin) class providing some commonly used stuff.
 from logging import getLogger
 from pathlib import Path
 import torch
-from typing import Any
+from typing import Any, Dict, Optional, Tuple
 
 from common.classes import ClassMap
 from common.type_aliases import (
@@ -64,7 +66,7 @@ class ModuleAdapter(torch.nn.Module):
             labels_batch: BatchLabelsT,
             *args,
             **kwargs
-    ) -> tuple[torch.Tensor, dict[str, Number] | None]:
+    ) -> Tuple[torch.Tensor, Optional[Dict[str, Number]]]:
         """
         Compute the scalar loss and possibly return partial losses or any
         kind of info in form of a {"key": scalar_value} dict.

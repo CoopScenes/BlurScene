@@ -47,6 +47,8 @@ def test():
 @app.route(f"/{anon_ep}", methods=["POST"])
 def anon_route():
     """Handle POST requests for anonymizing images."""
+    total_start = time.perf_counter()
+
     if "image" not in request.content_type:
         return "Unknown content type", 415
 
@@ -61,29 +63,39 @@ def anon_route():
         logger.debug(f"Received POST with {request.content_length=}")
         return f"Image too large: {img_size_bytes / 2 ** 20:.2e} MiB", 413
 
+    read_start = time.perf_counter()
     img_bytes = request.get_data()
+    read_end = time.perf_counter()
 
     # image to numpy array
     try:
+        decode_start = time.perf_counter()
         np_array = np.frombuffer(img_bytes, np.uint8)
         img = cv2.imdecode(np_array, cv2.IMREAD_COLOR)[..., (2, 1, 0)]
+        decode_end = time.perf_counter()
     except Exception as e:
         logger.exception("Unable to decode the image.")
         return f"Something went wrong: {e}", 500
 
     # Modell-Inferenz durchführen
+    inference_start = time.perf_counter()
     bboxes, classes, _ = inference.predict(img)
+    inference_end = time.perf_counter()
     # Debug-Ausgaben
     face_mask = classes == inference.class_map.name_to_index["face"]
     logger.debug(f"Found {face_mask.sum().item()} faces.")
     logger.debug(f"Found {(~face_mask).sum().item()} license plates.")
 
     # Konvertierung der Vorhersagen in numpy-Arrays
+    tensor_to_numpy_start = time.perf_counter()
     bboxes_np = bboxes.to(dtype=torch.int32).cpu().numpy().astype(np.int32)
     classes_np = classes.cpu().numpy().astype(np.int32)
+    tensor_to_numpy_end = time.perf_counter()
 
     # Verwende die erweiterte anonymize-Funktion, die auch die Klassen berücksichtigt
+    anonymize_start = time.perf_counter()
     img = anonymize(img, bboxes_np, classes_np)
+    anonymize_end = time.perf_counter()
 
     # Auswahl des passenden MIME-Typs
     if "jpg" in request.content_type or "jpeg" in request.content_type:
@@ -93,9 +105,24 @@ def anon_route():
         mime = "image/png"
         suffix = "png"
 
+    encode_start = time.perf_counter()
     imenc_ret, img_buf = cv2.imencode(f".{suffix}", img[..., (2, 1, 0)])
     if not imenc_ret:
         return "Unable to encode image", 500
+    encode_end = time.perf_counter()
+
+    total_end = time.perf_counter()
+    logger.info(
+        "Single image timings: read=%.3fs decode=%.3fs inference=%.3fs tensor_to_numpy=%.3fs anonymize=%.3fs encode=%.3fs total=%.3fs",
+        read_end - read_start,
+        decode_end - decode_start,
+        inference_end - inference_start,
+        tensor_to_numpy_end - tensor_to_numpy_start,
+        anonymize_end - anonymize_start,
+        encode_end - encode_start,
+        total_end - total_start,
+    )
+
     img_buf = BytesIO(img_buf.tobytes())
     return send_file(img_buf, mimetype=mime, download_name=f"anon_image.{suffix}")
 
